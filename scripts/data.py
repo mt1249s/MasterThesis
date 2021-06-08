@@ -1,11 +1,35 @@
+# purpose: distinguish lncRNA from the cRNA
+# 1. Design a model
+# 2. Construct loss & optimizer
+# 3. Training loop:
+# - forward pass (call model to predict)
+# - backward pass (autograd)
+# - update weights
+
+
 import torch
 import torch.nn as nn
 from Bio import SeqIO
+from torch import utils
+import matplotlib.pyplot as plt
 
 # We move our tensor to the GPU if available
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-file = open('H_train.fasta')
+# Hyper-parameters
+num_classes = 2
+num_epochs = 2
+batch_size = 4
+# learning_rate = 0.001
+
+# input_size = ?
+# sequence_length = ?
+hidden_size = 128
+num_layers = 1
+
+# preparing dataset (generate integer_seq / batching & padding / embedding)
+H_train = 'H_train.fasta'
+H_test = 'H_test.fasta'
 # define a dic
 letters = 'ACGT'
 emb_dict = {letter: number + 1 for number, letter in
@@ -23,23 +47,26 @@ def collate_seqs(integerized_samples):
         for j, v in enumerate(s):
             padded_input_tensor[j, i] = v
     label = torch.tensor([s[1] for s in integerized_samples])
+    # print(padded_input_tensor)
+    # print(padded_input_tensor.size())
     return padded_input_tensor, label
 
 
 class ClassificationDataset(torch.utils.data.Dataset):  # An abstract class representing a Dataset.
-    def __init__(self, file):  # loading targets and integerized data
+    def __init__(self, file_name):  # loading targets and integerized data
         self.samples = []
         self.targets = []
-        for record in SeqIO.parse(file, 'fasta'):
-            label_train = 0 if 'CDS' in record.id else 1
-            y = torch.tensor(label_train, dtype=torch.int)
-            self.targets.append(y)
-            integerized_seq = []
+        with open(file_name)as fn:
+            for record in SeqIO.parse(fn, 'fasta'):
+                label_train = 0 if 'CDS' in record.id else 1
+                y = torch.tensor(label_train, dtype=torch.long)
+                self.targets.append(y)
+                integerized_seq = []
 
-            for index, letter, in enumerate(record.seq):
-                integerized_seq.append(emb_dict[letter])
-            x = torch.tensor(integerized_seq, dtype=torch.long)
-            self.samples.append(x)
+                for index, letter, in enumerate(record.seq):
+                    integerized_seq.append(emb_dict[letter])
+                x = torch.tensor(integerized_seq, dtype=torch.long)
+                self.samples.append(x)
 
     def __getitem__(self, idx):  # indexing
         return self.samples[idx], self.targets[idx]
@@ -49,52 +76,32 @@ class ClassificationDataset(torch.utils.data.Dataset):  # An abstract class repr
 
 
 # create dataset
-ds = ClassificationDataset(file)
-
-# get first sample and unpack
-first_ds = ds[0]
-features, label = first_ds
-# print(features, label)
+ds_train = ClassificationDataset(H_train)
+ds_test = ClassificationDataset(H_test)
 
 
 # Load whole dataset with DataLoader
 # shuffle: shuffle data, good for training
-dl = torch.utils.data.DataLoader(ds, collate_fn=collate_seqs, batch_size=1, shuffle=False)
+dl_train = torch.utils.data.DataLoader(ds_train, collate_fn=collate_seqs, batch_size=batch_size, shuffle=True)
+dl_test = torch.utils.data.DataLoader(ds_test, collate_fn=collate_seqs, batch_size=batch_size, shuffle=True)
 
-# convert to an iterator and look at one random sample
-# dataiter = iter(dl)
-# data = dataiter.next()
-# features, labels = data
-# print(features.shape, labels.shape)
-# print(features, labels)
-
+# embedding
 num_embeddings = 5
-embedding_dim = 10
+embedding_dim = 6
 em = torch.nn.Embedding(num_embeddings, embedding_dim)
 
 
-# for batch in dl:
-# print(batch[0])
-# print(batch[0].size())
-# print(batch[0].max())
-# print(em(batch[0]).size())
-# print(em(batch[0]))
-# print(batch)
-# print(batch[0].dtype)
-# print(f"Device tensor is stored on: {batch[0].device}")
-
-# raise
-
-
+# Fully connected neural network with one hidden layer
 class RNN(nn.Module):
     # nn.RNN
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super(RNN, self).__init__()
-
+        self.num_layers = num_layers
         self.hidden_size = hidden_size
         self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
-        self.i2o = nn.Linear(input_size + hidden_size, output_size)
+        self.i2o = nn.Linear(input_size + hidden_size, num_classes)
         self.softmax = nn.LogSoftmax(dim=1)
+        # self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, input_tensor, hidden_tensor):
         combined = torch.cat((input_tensor, hidden_tensor), 1)
@@ -102,82 +109,74 @@ class RNN(nn.Module):
         hidden = self.i2h(combined)
         output = self.i2o(combined)
         output = self.softmax(output)
+        # output = self.sigmoid(output)
         return output, hidden
-
-    def init_hidden(self):
-        return torch.zeros(1, self.hidden_size)
 
 
 input_size = embedding_dim
-hidden_size = 128
-n_categories = 2
-rnn = RNN(input_size, hidden_size, n_categories)
-'''
+rnn = RNN(input_size, hidden_size, num_layers, num_classes)
+
 # one letter
-for batch in dl:
-    input_tensor = em(batch[0][0])
-    hidden_tensor = rnn.init_hidden()
-    output, next_hidden = rnn(input_tensor, hidden_tensor)
-    break
+# Training
+# criterion = nn.CrossEntropyLoss()
+criterion = nn.NLLLoss()  # The negative log likelihood size:(minibatch,C)
+learning_rate = 0.01
+optimizer = torch.optim.SGD(rnn.parameters(), lr=learning_rate)
+# optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 
-#print(output.size())
-#print(next_hidden.size())
+def train(sample, target):
+    hidden_tensor = torch.zeros(batch_size, hidden_size)
+    for i in range(sample.size(0)):
+        input_tensor = em(sample[i])
+        prediction, hidden_tensor = rnn(input_tensor, hidden_tensor)
+
+    # print(prediction, target)
+    guess = torch.argmax(prediction, dim=1)
+    # print(guess)
+    loss = criterion(prediction, target)
+    print(format(loss.item(), '.4f'))
+    optimizer.zero_grad()  # Zero the gradients while training the network
+    loss.backward()  # compute gradients
+    optimizer.step()  # updates the parameters
+
+    return guess, loss.item()
+
+
+current_loss = 0
+all_losses = []
+plot_steps, print_steps = 50, 250
+n_iters = 10500
+
+for i in range(n_iters):
+    for batch in dl_train:
+        sample, target = batch
+        guess, loss = train(sample, target)
+        current_loss += loss
+
+        if (i + 1) % plot_steps == 0:
+            all_losses.append(current_loss / plot_steps)
+            current_loss = 0
+
+        if (i + 1) % print_steps == 0:
+            correct = "CORRECT" if guess == target else f"WRONG ({target})"
+            print(f"{i + 1} {(i + 1) / n_iters * 100} {loss:.4f} {target} / {guess} {correct}")
+
+plt.figure()
+plt.plot(all_losses)
+plt.show()
+
 '''
+# Test model
+# In test phase, we don't need to compute gradients (for memory efficiency)
+with torch.no_grad():
+    n_correct = 0
+    n_samples = 0
+    for sample, target in dl_test:
 
-# one RNA seq??
-for batch in dl:
-    input_tensor = em(batch[0])
-    hidden_tensor = rnn.init_hidden()
-    print(input_tensor[0].size())
-    # print(hidden_tensor.size())
-    output, next_hidden = rnn(input_tensor[0], hidden_tensor)
-    print(output)
+        n_samples += target.size(0)
+        n_correct += (guess == target).sum().item()
 
-
-# print(output.size())
-# print(next_hidden.size())
-    break
-
-
-def category_from_output(output):
-    category_idx = torch.argmax(output)
-    return category_idx.item()
-
-
-print(category_from_output(output))
-
-
+    acc = 100.0 * n_correct / n_samples
+    print(f'Accuracy of the RNN network: {acc} %')
 '''
-##
-1. Design a model
-2. Construct loss & optimizer
-3. Training loop:
-- forward pass (call model to predict)
-- backward pass (autograd)
-- update weights 
-
-# Hyper-parameters
-input_size = 
-num_classes = 2
-num_epochs = 2
-#batch_size = 4
-learning_rate = 0.001
-
-input_size =
-#sequence_length = varied
-hidden_size = 128
-num_layers = 2
-
-# Design model
-
-# Loss and optimizer
-criterion = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-# prediction = model(batch)
-# loss = crit(prediction, target)
-
-# TODO training goes here
-'''
-
