@@ -44,6 +44,6 @@ class one_hidden_RNN(nn.Module):
         out = self.l1(input_tensor)
         out = self.relu(out)
         out = self.l2(out)
-
+        
         return out
 '''
