@@ -3,7 +3,7 @@
 # 2. Construct loss & optimizer
 # 3. Training loop:
 # - forward pass (call model to predict)
-# - backward pass (autograd)
+# - backward pass (calculate autograd)
 # - update weights
 
 
@@ -12,20 +12,20 @@ import torch.nn as nn
 from Bio import SeqIO
 from torch import utils
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+import mymodels
+from torchsummary import summary
+
 
 # We move our tensor to the GPU if available
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Hyper-parameters
-num_classes = 2
-num_epochs = 2
-batch_size = 4
+# num_epochs = 10
+batch_size = 1200
 # learning_rate = 0.001
-
-# input_size = ?
-# sequence_length = ?
-hidden_size = 128
-num_layers = 1
+hidden_size = 100
+num_classes = 2
 
 # preparing dataset (generate integer_seq / batching & padding / embedding)
 H_train = 'H_train.fasta'
@@ -34,7 +34,6 @@ H_test = 'H_test.fasta'
 letters = 'ACGT'
 emb_dict = {letter: number + 1 for number, letter in
             enumerate(letters)}  # number+1 for emb because the padded_input_tensor is zero
-
 
 # padding
 def collate_seqs(integerized_samples):
@@ -89,53 +88,43 @@ dl_test = torch.utils.data.DataLoader(ds_test, collate_fn=collate_seqs, batch_si
 num_embeddings = 5
 embedding_dim = 6
 em = torch.nn.Embedding(num_embeddings, embedding_dim)
-
-
-# Fully connected neural network with one hidden layer
-class RNN(nn.Module):
-    # nn.RNN
-    def __init__(self, input_size, hidden_size, num_layers, num_classes):
-        super(RNN, self).__init__()
-        self.num_layers = num_layers
-        self.hidden_size = hidden_size
-        self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
-        self.i2o = nn.Linear(input_size + hidden_size, num_classes)
-        self.softmax = nn.LogSoftmax(dim=1)
-        # self.sigmoid = torch.nn.Sigmoid()
-
-    def forward(self, input_tensor, hidden_tensor):
-        combined = torch.cat((input_tensor, hidden_tensor), 1)
-
-        hidden = self.i2h(combined)
-        output = self.i2o(combined)
-        output = self.softmax(output)
-        # output = self.sigmoid(output)
-        return output, hidden
+em.cuda()
 
 
 input_size = embedding_dim
-rnn = RNN(input_size, hidden_size, num_layers, num_classes)
+model = mymodels.basicRNN(input_size, hidden_size, num_classes)
 
-# one letter
-# Training
-# criterion = nn.CrossEntropyLoss()
-criterion = nn.NLLLoss()  # The negative log likelihood size:(minibatch,C)
-learning_rate = 0.01
-optimizer = torch.optim.SGD(rnn.parameters(), lr=learning_rate)
-# optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+model.cuda()
 
 
-def train(sample, target):
-    hidden_tensor = torch.zeros(batch_size, hidden_size)
+current_loss = 0
+all_losses = []
+#plot_steps, print_steps = 250, 500
+num_epochs = 1
+
+
+criterion = nn.CrossEntropyLoss()
+learning_rate = 0.005
+# optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+#params = list(model.parameters())
+#print(len(params))
+#print(params[0].size())
+
+
+def train_model(sample, target):
+    hidden_tensor = torch.zeros(batch_size, hidden_size, device=sample.device)
     for i in range(sample.size(0)):
         input_tensor = em(sample[i])
-        prediction, hidden_tensor = rnn(input_tensor, hidden_tensor)
-
-    # print(prediction, target)
+        prediction, hidden_tensor = model(input_tensor, hidden_tensor) #basicRNN
+    #print(prediction, target)
     guess = torch.argmax(prediction, dim=1)
     # print(guess)
     loss = criterion(prediction, target)
-    print(format(loss.item(), '.4f'))
+    #print(loss.grad_fn)  # Adam
+    #print(loss.grad_fn.next_functions[0][0])  # Linear
+    #print(loss.grad_fn.next_functions[0][0].next_functions[0][0])  # ReL
+    #print(format(loss.item(), '.4f'))
     optimizer.zero_grad()  # Zero the gradients while training the network
     loss.backward()  # compute gradients
     optimizer.step()  # updates the parameters
@@ -143,28 +132,32 @@ def train(sample, target):
     return guess, loss.item()
 
 
-current_loss = 0
-all_losses = []
-plot_steps, print_steps = 50, 250
-n_iters = 10500
-
-for i in range(n_iters):
-    for batch in dl_train:
+for i in range(num_epochs):
+    for batch in tqdm(dl_train):
         sample, target = batch
-        guess, loss = train(sample, target)
-        current_loss += loss
+        sample = sample.cuda()
+        target = target.cuda()
+        guess, loss = train_model(sample, target)
+        all_losses.append(loss)
+        #current_loss += loss
 
-        if (i + 1) % plot_steps == 0:
-            all_losses.append(current_loss / plot_steps)
-            current_loss = 0
+        #if (i + 1) % plot_steps == 0:
+            #all_losses.append(current_loss / plot_steps)
+            #current_loss = 0
 
-        if (i + 1) % print_steps == 0:
-            correct = "CORRECT" if guess == target else f"WRONG ({target})"
-            print(f"{i + 1} {(i + 1) / n_iters * 100} {loss:.4f} {target} / {guess} {correct}")
+        #if (i + 1) % print_steps == 0:
+            #correct = "CORRECT" if guess == target else f"WRONG ({target})"
+            #print(f"{i + 1} {(i + 1) / num_epochs * 100} {loss:.4f} {target} / {guess} {correct}")
 
+
+#print(all_losses)
+#print(len(all_losses))
 plt.figure()
 plt.plot(all_losses)
 plt.show()
+
+
+
 
 '''
 # Test model
