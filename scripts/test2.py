@@ -145,12 +145,29 @@ plt.show()
 import torch
 import torch.nn as nn
 rnn = nn.RNN(10, 20, 2)
-print(rnn)
 input = torch.randn(5, 3, 10)
 h0 = torch.randn(2, 3, 20)
 output, hn = rnn(input, h0)
 
-print(output)
+print(input.size())
+print(output.size())
+print(hn.size())
+'''
+
+
+import torch
+x = torch.ones(2, 2, requires_grad=True)
+y = x*x + 2
+#gradient = torch.randn(2, 2)
+# this would fail if we didn't specify
+# that we want to retain variables
+y.backward(x)
+
+print(x.grad)
+
+
+
+
 '''
 import torch
 from torch.nn.utils.rnn import pack_sequence
@@ -158,7 +175,7 @@ a = torch.tensor([1,2,3])
 b = torch.tensor([4,5])
 c = torch.tensor([6])
 print(pack_sequence([a, b, c]))
-
+'''
 
 
 
