@@ -9,11 +9,11 @@
 import numpy as np
 import torch
 from Bio import SeqIO
-from torch import utils
+# from torch import utils
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import train
-from torchsummary import summary
+# from torchsummary import summary
 
 # We move our tensor to the GPU if available
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -29,6 +29,8 @@ emb_dict = {letter: number + 1 for number, letter in
 
 # padding
 def collate_seqs(integerized_samples):
+    ''' input; tensor of shape [l. b]? '''
+    ''' input: or tuple (tensor of shape [l, b] contains sequence, tensor of shape [l, b] contains ORF indicator'''
     batch_size = len(integerized_samples)
     integerized_seqs = [s[0] for s in integerized_samples]
     maxlen = max([len(seq) for seq in integerized_seqs])
@@ -41,23 +43,32 @@ def collate_seqs(integerized_samples):
     return padded_input_tensor, label
 
 
+# TODO: implement string to int as transform
+# TODO: implement list of ints to tensor as a transform
+# TODO: implement orf finding as transform
+# TODO: adapt collate function to handle orfs optionally
 class ClassificationDataset(torch.utils.data.Dataset):  # An abstract class representing a Dataset.
-    def __init__(self, file_name):  # loading targets and integerized data
+    def __init__(self, file_name, transform=None):  # loading targets and integerized data
         self.samples = []
         self.targets = []
+
+        self.transform = transform
+
         with open(file_name)as fn:
             for record in SeqIO.parse(fn, 'fasta'):
                 label_train = 0 if 'CDS' in record.id else 1
                 y = torch.tensor(label_train, dtype=torch.long)
                 self.targets.append(y)
-                integerized_seq = []
+                # integerized_seq = []
 
-                for index, letter, in enumerate(record.seq):
-                    integerized_seq.append(emb_dict[letter])
-                x = torch.tensor(integerized_seq, dtype=torch.long)
-                self.samples.append(x)
+                # for index, letter, in enumerate(record.seq):
+                #     integerized_seq.append(emb_dict[letter])
+                # x = torch.tensor(integerized_seq, dtype=torch.long)
+                self.samples.append(record.seq)
 
     def __getitem__(self, idx):  # indexing
+        if self.transform is not None:
+            return self.transform(self.samples[idx]), self.targets[idx]
         return self.samples[idx], self.targets[idx]
 
     def __len__(self):
@@ -65,8 +76,9 @@ class ClassificationDataset(torch.utils.data.Dataset):  # An abstract class repr
 
 
 # create dataset
-ds_train = ClassificationDataset(H_train)
-ds_test = ClassificationDataset(H_test)
+transform = ORFTransform()
+ds_train = ClassificationDataset(H_train, transform)
+ds_test = ClassificationDataset(H_test, transform)
 
 # Load whole dataset with DataLoader
 # shuffle: shuffle data, good for training
@@ -141,6 +153,3 @@ plt.plot(x_train, mean_losses, color='tab:blue', marker='o')
 x_test = np.arange(0, len(dl_test))
 plt.plot(x_test, all_losses_test, color='tab:orange', linestyle='--')
 plt.show()
-
-
-

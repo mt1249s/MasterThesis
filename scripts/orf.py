@@ -1,7 +1,6 @@
 from Bio import SeqIO
 import re
 import torch
-import matplotlib.pyplot as plt
 
 H_train = 'H_train.fasta'
 
@@ -11,6 +10,7 @@ emb_dict = {letter: number + 1 for number, letter in
             enumerate(letters)}  # number+1 for emb because the padded_input_tensor is zero
 
 
+# TODO input should be either string or sequence of ints
 def orf_finder(file_name):
     ORF = []
     label_orf = []
@@ -37,14 +37,7 @@ def orf_finder(file_name):
             label_orf.append(label)
             labels_orf = torch.tensor(label_orf, dtype=torch.long)
 
-        return orfs, labels_orf
+        return orfs, labels_orf  # TODO remove labeling
 
 
 [orfs, labels_orf] = orf_finder(H_train)
-
-
-
-
-
-
-
