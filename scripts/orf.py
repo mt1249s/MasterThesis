@@ -1,16 +1,19 @@
 from Bio import SeqIO
 import re
+import torch
 import matplotlib.pyplot as plt
+
+H_train = 'H_train.fasta'
+
+# define a dic
+letters = 'ACGT'
+emb_dict = {letter: number + 1 for number, letter in
+            enumerate(letters)}  # number+1 for emb because the padded_input_tensor is zero
+
 
 def orf_finder(file_name):
     ORF = []
-    orf_length = []
-    orf_ratio = []
-    orf_targets = []
-    orf_cRNA = []
-    orf_ncRNA = []
-    orf_cRNA_length = []
-    orf_ncRNA_length = []
+    label_orf = []
     with open(file_name) as fn:
         for record in SeqIO.parse(fn, 'fasta'):
             stop_to_stop_codons = re.split(r'TAA|TAG|TGA', str(record.seq))
@@ -27,35 +30,21 @@ def orf_finder(file_name):
                 codon_len[index_max] = 0
                 orf = '0'
                 # print(codon_len[index_max])
-            # orf = torch.tensor(orf, dtype=torch.long)
             ORF.append(orf)
-            orf_length.append(codon_len[index_max])
-            orf_ratio.append(codon_len[index_max]/len(record.seq))
-            #label = 0 if 'CDS' in record.id else 1
-            if 'CDS' in record.id:
-                label = 0
-                orfc = orf
-                orfc_length = codon_len[index_max]
-            else:
-                label = 1
-                orfnc = orf
-                orfnc_length = codon_len[index_max]
-            orf_ncRNA.append(orfnc)
-            orf_ncRNA_length.append(orfnc_length)
+            orfs = torch.tensor(ORF, dtype=torch.long)
 
-            orf_targets.append(label)
-            # orf_targets = torch.tensor(label, dtype=torch.long)
-        orf_lst = [ORF, orf_targets, orf_length, orf_ratio, orf_cRNA, orf_ncRNA, orf_cRNA_length, orf_ncRNA_length]
-        return orf_lst
+            label = 0 if 'CDS' in record.id else 1
+            label_orf.append(label)
+            labels_orf = torch.tensor(label_orf, dtype=torch.long)
+
+        return orfs, labels_orf
 
 
-[ORF, orf_targets, orf_length, orf_ratio, orf_cRNA, orf_ncRNA, orf_cRNA_length, orf_ncRNA_length] = orf_finder(H_train)
+[orfs, labels_orf] = orf_finder(H_train)
 
-# the histogram of the orf
-n, bins, patches = plt.hist(orf_cRNA_length, 50, density=True, facecolor='g', alpha=0.75)
 
-plt.xlabel('ORF length')
-plt.ylabel('number')
-plt.title('length distribution of ORF for ncRNA')
-plt.grid(True)
-plt.show()
+
+
+
+
+
