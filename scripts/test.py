@@ -101,7 +101,7 @@ model = nn.RNN(input_size, hidden_size, num_layers, num_classes).to(device)
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 '''
-
+'''
 em = torch.nn.Embedding(5, 4, 0) # embed batch -> [L, B, H] 5:ACGT0, 4:batch_size, 0:padded-idx
 
 for batch in dl:
@@ -116,11 +116,80 @@ for batch in dl:
 
     raise
 
-
-
-    # TODO training goes here
+'''
 
 '''
 prediction = model(batch)
 loss = crit(prediction, target)
+'''
+from Bio import SeqIO
+import re
+import matplotlib.pyplot as plt
+
+import data
+import re
+from Bio import SeqIO
+from data import ds_train
+
+def orf_finder(ds_train):
+    ORF = []
+    orf_length = []
+    orf_ratio = []
+    orf_targets = []
+    #orf_cRNA = []
+    #orf_ncRNA = []
+    #orf_cRNA_length = []
+    #orf_ncRNA_length = []
+
+    for i in first_ds:
+        stop_to_stop_codons = re.split(r'411|413|431', str(ds_train))
+        # print(stop_to_stop_codons)
+        codon_len = [len(seq) for seq in stop_to_stop_codons]
+        codon_len = codon_len[1:-2]
+        # print(codon_len)
+        for loop in codon_len:
+            index_max = codon_len.index(max(codon_len))
+            if (max(codon_len) % 3 == 0) & (max(codon_len) != 0):
+                orf = stop_to_stop_codons[index_max + 1]
+                # print(orf)
+                break
+            codon_len[index_max] = 0
+            orf = '0'
+            # print(codon_len[index_max])
+        # orf = torch.tensor(orf, dtype=torch.long)
+        ORF.append(orf)
+        orf_length.append(codon_len[index_max])
+        orf_ratio.append(codon_len[index_max]/len(record.seq))
+        label = 0 if 'CDS' in record.id else 1
+        #if 'CDS' in record.id:
+            #label = 0
+            #orfc = orf
+            #orfc_length = codon_len[index_max]
+        #else:
+            #label = 1
+            #orfnc = orf
+            #orfnc_length = codon_len[index_max]
+        #orf_ncRNA.append(orfnc)
+        #orf_ncRNA_length.append(orfnc_length)
+        orf_targets.append(label)
+        # orf_targets = torch.tensor(label, dtype=torch.long)
+    orf_lst = [ORF, orf_targets, orf_length, orf_ratio]
+    return orf_lst
+
+
+[ORF, orf_targets, orf_length, orf_ratio] = orf_finder(H_train)
+
+
+#define a dic
+letters = 'ACGT'
+emb_dic = {letter: number+1 for number, letter in enumerate(letters)}
+'''
+# the histogram of the orf
+n, bins, patches = plt.hist(orf_cRNA_length, 50, density=True, facecolor='g', alpha=0.75)
+
+plt.xlabel('ORF length')
+plt.ylabel('number')
+plt.title('length distribution of ORF for ncRNA')
+plt.grid(True)
+plt.show()
 '''

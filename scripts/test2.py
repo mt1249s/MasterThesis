@@ -44,6 +44,8 @@ output.backward()
 
 
 '''
+import numpy as np
+
 '''
 ## ORF Indicating
 for index, record in enumerate(SeqIO.parse(open("file.fasta"), "fasta")):
@@ -154,7 +156,7 @@ print(output.size())
 print(hn.size())
 '''
 
-
+'''
 import torch
 x = torch.ones(2, 2, requires_grad=True)
 y = x*x + 2
@@ -164,7 +166,7 @@ y = x*x + 2
 y.backward(x)
 
 print(x.grad)
-
+'''
 
 
 
@@ -176,17 +178,78 @@ b = torch.tensor([4,5])
 c = torch.tensor([6])
 print(pack_sequence([a, b, c]))
 '''
+'''
+import torch
+output = torch.tensor([[-0.0285, -0.0403],
+        [-0.0259, -0.0391],
+        [-0.0307, -0.0389],
+        [-0.0295, -0.0434],
+        [-0.0270, -0.0395],
+        [-0.0276, -0.0403],
+        [-0.0264, -0.0399],
+        [-0.0252, -0.0415],
+        [-0.0311, -0.0388],
+        [-0.0304, -0.0386],
+        [-0.0286, -0.0370],
+        [-0.0275, -0.0389]],
+)
 
+output = torch.nn.functional.softmax(output)
+#print(output)
 
+outputs = torch.tensor(output).squeeze()
+#print(outputs)
 
+print(torch.unsqueeze(torch.tensor(output), 0))
+if (outputs == torch.unsqueeze(torch.tensor([1., 0.], dtype=torch.float), 0)).all():
+    print("all training samples predicted as negative")
 
+if (outputs == torch.unsqueeze(torch.tensor([0., 1.], dtype=torch.float), 0)).all():
+    print("all training samples predicted as positive")
 
+'''
+'''
+import numpy as np
+num_epochs = 20
+x_train = np.arange(1, num_epochs+1)
 
+for p in x_train:
+        batch_size = p
+'''
+'''
+import torch
+a = torch.tensor([[1, 2], [0.2, 0.1], [0, 1]], dtype=torch.float)
+b = torch.tensor([[1, 1], [1, 1], [0, 0]], dtype=torch.float)
+c = torch.cdist(a, b, p=2)
+d = c.sum()/torch.numel(c)
+print(d)
+'''
+'''
+import torch
+tmp=[torch.rand(2,4),torch.rand(2,4), torch.rand(2,4), torch.rand(2,4)]
+print(type(tmp))
+print(type(tmp[0]))
+print(type(tmp[0][0]))
 
+# The full tmp
+print(tmp)
+print(tmp[0])
+print(tmp[0][0])
 
+# After a stack, you convert the list to a dimensions
+print(torch.stack(tmp))
 
-
-
+'''
+'''
+import torch
+import torch.nn as nn
+loss = nn.CrossEntropyLoss()
+input = torch.randn(3, 5, requires_grad=True)
+target = torch.empty(3, dtype=torch.long).random_(5)
+output = loss(input, target)
+print(output)
+output.backward()
+'''
 
 
 

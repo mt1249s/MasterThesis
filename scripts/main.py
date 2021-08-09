@@ -13,7 +13,7 @@ from torch import utils
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import train
-from torchsummary import summary
+
 
 
 # We move our tensor to the GPU if available
@@ -25,7 +25,7 @@ H_test = 'H_test.fasta'
 # define a dic
 letters = 'ACGT'
 emb_dict = {letter: number + 1 for number, letter in
-            enumerate(letters)}  # number+1 for emb because the padded_input_tensor is zero
+            enumerate(letters)}  # number+1 for emb bause the padded_input_tensor is zero
 
 
 # padding
@@ -67,13 +67,13 @@ class ClassificationDataset(torch.utils.data.Dataset):  # An abstract class repr
 
 # create dataset
 ds_train = ClassificationDataset(H_train)
-ds_test = ClassificationDataset(H_test)
+# ds_test = ClassificationDataset(H_test)
 
 
 # Load whole dataset with DataLoader
 # shuffle: shuffle data, good for training
 dl_train = torch.utils.data.DataLoader(ds_train, collate_fn=collate_seqs, batch_size=train.batch_size, shuffle=True)
-dl_test = torch.utils.data.DataLoader(ds_test, collate_fn=collate_seqs, batch_size=train.batch_size, shuffle=False)
+# dl_test = torch.utils.data.DataLoader(ds_test, collate_fn=collate_seqs, batch_size=train.batch_size, shuffle=False)
 
 
 # embedding
@@ -107,8 +107,8 @@ for epoch in range(num_epochs):
     n_correct = 0
     for batch in tqdm(dl_train):
         sample, target = batch
-        sample = sample.cuda()
-        target = target.cuda()
+        sample = sample.to(device)
+        target = target.to(device)
         guess, loss = train.train_model(sample, target)
         all_losses.append(loss)
 
@@ -117,7 +117,7 @@ for epoch in range(num_epochs):
 
     diff_params = sum(train.batch_mean_dis) / len(train.batch_mean_dis)
     epoch_diff_params.append(diff_params)
-
+'''
     with torch.no_grad():
         n_correct_test = 0
         n_samples_test = 0
@@ -178,4 +178,5 @@ plt.xlabel('epoch')
 plt.ylabel('distance')
 plt.title('distance between model parameters before and after update')
 plt.text(1, .0004, r'batch_size=1, lr={learning_rate}, Model')
+'''
 '''

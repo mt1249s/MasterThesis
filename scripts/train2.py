@@ -19,8 +19,8 @@ em = torch.nn.Embedding(num_embeddings, embedding_dim).to(device)
 import numpy as np
 # Hyper-parameters
 input_size = embedding_dim
-learning_rate = 0.001
-batch_size = 125
+learning_rate = 0.0004
+batch_size = 1
 hidden_size = 100
 num_classes = 2
 num_layers = 2
@@ -65,12 +65,10 @@ def train_model(sample, target):
     batch_mean_dis.append(temp)
 
     return guess, loss.item()
-'''
+
 
 def test_model(sample, target):
-    print(sample)
     input_tensor = em(sample)
-    raise
     input_tensor = torch.reshape(input_tensor, (batch_size, sample.size(0), input_size)).to(device)
     prediction = model(input_tensor)
     #print(f'prediction test: {prediction}')
@@ -83,5 +81,5 @@ def test_model(sample, target):
 
     return guess, loss_test.item()
 
-'''
+
 
