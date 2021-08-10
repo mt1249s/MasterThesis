@@ -6,7 +6,6 @@ import tensorflow as tf
 from tensorflow.keras import models, layers
 from tensorflow.keras.utils import plot_model
 import keras
-from matplotlib import pyplot as plt
 from keras.models import load_model
 from matplotlib import pyplot as plt
 import positional_embedding
@@ -39,6 +38,7 @@ with open(fasta_train)as fn:
         size_train = size_train + 1
         lst = [record.id, str(record.seq), len(record), label_train]
         # print(lst)
+
         for index, letter, in enumerate(record.seq):
             train_sample.append(emb_dict[letter])
 
@@ -80,24 +80,32 @@ padded_tests, test_labels = np.array(padded_tests), np.array(test_labels)
 max_train = 3000
 
 input_layer1 = layers.Input(shape=(max_train,))
-embedding_layer = tf.keras.layers.Embedding(input_dim=5, output_dim=6, input_length=3000)(input_layer1)
-flatt_output = layers.Flatten()(embedding_layer)
+embedding_layer = tf.keras.layers.Embedding(input_dim=5, output_dim=2, input_length=3000, mask_zero=True)(input_layer1)
+#flatt_output = layers.Flatten()(embedding_layer)
 
-'''
-length_of_one_rna = 6000 # (output_dim*input_length)
+units = 3
 
-query0 = layers.Dense(length_of_one_rna, name='query_layer0')(flatt_output)
-values0 = layers.Dense(length_of_one_rna, name='values_layer0')(flatt_output)
-attention_kernel0 = layers.Attention()([query0, values0])
+query0 = layers.Dense(units, name='query_layer0')(embedding_layer)
+key0 = layers.Dense(units, name='key_layer0')(embedding_layer)
+values0 = layers.Dense(units, name='values_layer0')(embedding_layer)
+tf.matmul(
+    query0,
+    key0,
+    transpose_a=False,
+    transpose_b=True,
+    name='query_key_layer0'
+)
 
-query1 = layers.Dense(length_of_one_rna, name='query_layer1')(flatt_output)
-values1 = layers.Dense(length_of_one_rna, name='values_layer1')(flatt_output)
+#attention_kernel0 = layers.Attention()([query0, values0])
+
+query1 = layers.Dense(units, name='query_layer1')(embedding_layer)
+values1 = layers.Dense(units, name='values_layer1')(embedding_layer)
 attention_kernel1 = layers.Attention()([query1, values1])
 
-query2 = layers.Dense(length_of_one_rna, name='query_layer2')(flatt_output)
-values2 = layers.Dense(length_of_one_rna, name='values_layer2')(flatt_output)
+query2 = layers.Dense(units, name='query_layer2')(embedding_layer)
+values2 = layers.Dense(units, name='values_layer2')(embedding_layer)
 attention_kernel2 = layers.Attention()([query2, values2])
-
+'''
 concated_heads = layers.Concatenate()([attention_kernel0, attention_kernel1, attention_kernel2])
 attention_output = layers.Dense(length_of_one_rna)(concated_heads)
 
