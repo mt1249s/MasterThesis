@@ -6,11 +6,12 @@ import tensorflow as tf
 from tensorflow.keras import models, layers
 from tensorflow.keras.utils import plot_model
 import keras
+from matplotlib import pyplot as plt
 from keras.models import load_model
 from matplotlib import pyplot as plt
-import positional_embedding
 # import sklearn
 # from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
+import dot_product_attention
 
 fasta_train = 'H_train.fasta'
 csv_train = 'H_train.csv'
@@ -38,7 +39,6 @@ with open(fasta_train)as fn:
         size_train = size_train + 1
         lst = [record.id, str(record.seq), len(record), label_train]
         # print(lst)
-
         for index, letter, in enumerate(record.seq):
             train_sample.append(emb_dict[letter])
 
@@ -78,74 +78,85 @@ padded_tests, test_labels = np.array(padded_tests), np.array(test_labels)
 ### what are the max lengths of the train dataset?
 # max_train = df_train['length'].max()
 max_train = 3000
+d_model = 32
+output_dim = 2
 
 input_layer1 = layers.Input(shape=(max_train,))
-embedding_layer = tf.keras.layers.Embedding(input_dim=5, output_dim=2, input_length=3000, mask_zero=True)(input_layer1)
+embedding_layer = tf.keras.layers.Embedding(input_dim=5, output_dim=2, input_length=3000)(input_layer1)
 #flatt_output = layers.Flatten()(embedding_layer)
 
-units = 3
+q0 = layers.Dense(d_model, use_bias=False, name='query_layer0')(embedding_layer)
+k0 = layers.Dense(d_model, use_bias=False, name='key_layer0')(embedding_layer)
+v0 = layers.Dense(d_model, use_bias=False, name='values_layer0')(embedding_layer)
 
-query0 = layers.Dense(units, name='query_layer0')(embedding_layer)
-key0 = layers.Dense(units, name='key_layer0')(embedding_layer)
-values0 = layers.Dense(units, name='values_layer0')(embedding_layer)
-tf.matmul(
-    query0,
-    key0,
-    transpose_a=False,
-    transpose_b=True,
-    name='query_key_layer0'
-)
+attention_filter0 = tf.matmul(q0, k0, transpose_b=True)
+scale = np.math.sqrt(d_model)
+Scaling = attention_filter0 / scale
+attention_weights0 = tf.nn.softmax(Scaling, axis=-1)
+print('Attention weights are:')
+print(attention_weights0.shape)
+output0 = tf.matmul(attention_weights0, v0)
+print('Output is:')
+print(output0.shape)
 
-#attention_kernel0 = layers.Attention()([query0, values0])
 
-query1 = layers.Dense(units, name='query_layer1')(embedding_layer)
-values1 = layers.Dense(units, name='values_layer1')(embedding_layer)
-attention_kernel1 = layers.Attention()([query1, values1])
+q1 = layers.Dense(d_model, use_bias=False, name='query_layer1')(embedding_layer)
+k1 = layers.Dense(d_model, use_bias=False, name='key_layer1')(embedding_layer)
+v1 = layers.Dense(d_model, use_bias=False, name='values_layer1')(embedding_layer)
 
-query2 = layers.Dense(units, name='query_layer2')(embedding_layer)
-values2 = layers.Dense(units, name='values_layer2')(embedding_layer)
-attention_kernel2 = layers.Attention()([query2, values2])
-'''
-concated_heads = layers.Concatenate()([attention_kernel0, attention_kernel1, attention_kernel2])
-attention_output = layers.Dense(length_of_one_rna)(concated_heads)
+attention_filter1 = tf.matmul(q1, k1, transpose_b=True)
+scale = np.math.sqrt(d_model)
+Scaling = attention_filter1 / scale
+attention_weights1 = tf.nn.softmax(Scaling, axis=-1)
+print('Attention weights are:')
+print(attention_weights1.shape)
+output1 = tf.matmul(attention_weights1, v1)
 
-RNNS_input = layers.Reshape((3000, -1))(attention_output)
-# RNNS_input = layers.Reshape((3000, -1))(attention_kernel0)
-# RNNS_input = layers.Flatten()(RNNS_input)
+concated_heads = layers.Concatenate()([output0, output1])
+multi_head_output = layers.Dense(output_dim)(concated_heads)
 
-# Add & Norm
-# Add = tf.keras.layers.Add()([RNNS_input, padded_input])
+#temp_out0, temp_attn0 = dot_product_attention.scaled_dot_product_attention(q0, k0, v0, None)
+
+#print('Attention weights are:')
+#print(temp_attn0.shape)
+#print('Output is:')
+#print(temp_out0.shape)
+
+#q1 = layers.Dense(output_dim, use_bias=False, name='query_layer1')(embedding_layer)
+#k1 = layers.Dense(output_dim, use_bias=False, name='key_layer1')(embedding_layer)
+#v1 = layers.Dense(output_dim, use_bias=False, name='values_layer1')(embedding_layer)
+
+#temp_out1, temp_attn1 = dot_product_attention.scaled_dot_product_attention(q1, k1, v1, None)
+
+#q2 = layers.Dense(output_dim, use_bias=False, name='query_layer2')(embedding_layer)
+#k2 = layers.Dense(output_dim, use_bias=False, name='key_layer2')(embedding_layer)
+#v2 = layers.Dense(output_dim, use_bias=False, name='values_layer2')(embedding_layer)
+
+#temp_out2, temp_attn2 = dot_product_attention.scaled_dot_product_attention(q2, k2, v2, None)
+#concated_heads = layers.Concatenate()([temp_out0, temp_out1])
+#attention_output = layers.Dense(output_dim)(temp_out0)
 
 # feed_forward
-hidden = layers.Dense(5, activation='relu')(RNNS_input)
-hidden = layers.Dense(5, activation='relu')(hidden)
+#hidden = layers.Dense(3, activation='relu')(attention_output)
+#hidden = layers.Dense(2, activation='relu')(hidden)
 
-# Conv1d = layers.Conv1D(32, 1)(RNNS_input)
-# Conv1d = layers.Conv1D(64, 3)(Conv1d)
-# Conv1d = layers.Conv1D(128, 3)(Conv1d)
-'''
 
-GRU_layer = layers.GRU(100, activation='tanh', recurrent_activation='sigmoid', dropout=0.5)(embedding_layer)
-#hidden = layers.Dense(100)(GRU_layer)
-hidden = layers.Dense(100, activation='relu')(GRU_layer)
-cf = layers.Dense(1, activation='sigmoid')(hidden)
-# cf = layers.Dense(1, activation='sigmoid')(hidden)
-# cf = layers.Dense(1)(GRU_layer)
+# cf = layers.Dense(1, activation='sigmoid')(temp_out)
+cf = layers.Dense(1, activation='sigmoid')(temp_out0)
 
 adam = tf.keras.optimizers.Adam(
-    learning_rate=0.0004,
-    beta_1=0.0,
-    beta_2=0.0,
+    learning_rate=0.01,
+    beta_1=0.6,
+    beta_2=0.6,
     epsilon=1e-07,
     amsgrad=False)
-sgd = tf.keras.optimizers.SGD(learning_rate=0.1, momentum=0.8, nesterov=True)
+#sgd = tf.keras.optimizers.SGD(learning_rate=0.1, momentum=0.8, nesterov=True)
 
 classifier = models.Model(input_layer1, cf)
 
 classifier.compile(optimizer=adam,
                    loss='binary_crossentropy',
                    metrics=['accuracy'])
-
 classifier.summary()
 plot_model(classifier, to_file="model.png")
 #callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=5)
@@ -156,14 +167,21 @@ plot_model(classifier, to_file="model.png")
     #profile_batch=2, embeddings_freq=0, embeddings_metadata=None)
 
 #tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs")
-history = classifier.fit(padded_inputs, train_labels, batch_size=1, epochs=10, validation_data=(padded_tests, test_labels))
+history = classifier.fit(padded_inputs, train_labels, batch_size=32, epochs=20, validation_data=(padded_tests, test_labels))
+'''
+pred = classifier.predict([padded_tests, test_labels])
+pred = np.argmax(pred, axis=1)
+
+from sklearn.metrics import mean_squared_error, accuracy_score
+print(f'error: {mean_squared_error(test_labels, pred)}')
+print(f'accuracy: {accuracy_score(test_labels, pred)}')
 #history.history
 
 # Evaluate the model on the test data using `evaluate`
 print("Evaluate on test data")
 results = classifier.evaluate(padded_tests, test_labels)
 print("test loss, test acc:", results)
-
+'''
 plt.plot(history.history['accuracy'])
 plt.plot(history.history['val_accuracy'])
 plt.title('model accuracy')
@@ -184,4 +202,3 @@ classifier.save('./epoch_10_attention.h5')
 # classifier.save_weights('./epoch_10_attention.h5')
 # my_model = load_model('./epoch_10_attention.h5')
 # my_model.get_weights()
-
