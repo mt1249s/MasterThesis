@@ -1,12 +1,11 @@
 import numpy as np
+import pandas as pd
 import csv
 import tensorflow as tf
-import seaborn as sns
 import MarginModels
 import Evaluation
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 from tensorflow.keras.utils import to_categorical
+from tensorflow.python.keras.engine.base_layer import Layer
 from Bio import SeqIO
 from tensorflow.keras import models, layers
 from tensorflow.keras import regularizers
@@ -14,8 +13,6 @@ from tensorflow.keras.utils import plot_model
 from sklearn.metrics import mean_squared_error, accuracy_score, precision_score, recall_score, f1_score
 from sklearn.metrics import confusion_matrix
 
-
-tf.keras.backend.clear_session
 
 
 fasta_train = 'H_train.fasta'
@@ -90,12 +87,12 @@ padded_tests, test_labels = np.array(padded_tests), np.array(test_labels)
 input_layer1 = layers.Input(shape=(max_train,))
 y_input_layer = layers.Input(shape=(2,))
 
-embedding_layer = tf.keras.layers.Embedding(input_dim=5, output_dim=1, input_length=3000, mask_zero=True)(input_layer1)
+embedding_layer = tf.keras.layers.Embedding(input_dim=5, output_dim=2, input_length=3000, mask_zero=True)(input_layer1)
 flatt_output = layers.Flatten()(embedding_layer)
 
 weight_decay = 1e-4
 cf = MarginModels.ArcFace(2, regularizer=regularizers.l2(weight_decay))([flatt_output, y_input_layer])
-#cf = SphereFace(2, regularizer=regularizers.l2(weight_decay))([flatt_output, y_input_layer])
+#cf = SphereFace(2, regularizer=regularizers.l2(weight_decay))([attention_kernel0, y_input_layer])
 #cf =CosFace(2, regularizer=regularizers.l2(weight_decay))([flatt_output, y_input_layer])
 
 
@@ -107,7 +104,7 @@ adam = tf.keras.optimizers.Adam(
     amsgrad=False,
     name="Adam")
 
-classifier = models.Model([input_layer1, y_input_layer], cf)
+classifier = models.Model([input_layer1, y_input_layer] , cf)
 
 classifier.compile(loss='categorical_crossentropy',
                    optimizer=adam,
@@ -122,24 +119,26 @@ plot_model(classifier, to_file="model.png")
 pred = classifier.predict([padded_tests, test_labels])
 print(pred)
 
-pred = np.argmax(pred, axis=1)
+pred = np.argmax(pred,axis=1)
 print(pred)
 
 # accuracy
 CalculatedAccuracy = sum(pred == test_labels)/len(pred)
-print(f'Accuracy: {CalculatedAccuracy:.3f}')
+print(f'Accuracy: {CalculatedAccuracy:.2f}')
 
 # evaluation scores
 Evaluation.eval_metrics(test_labels, pred)
 
-print(f'error: {mean_squared_error(test_labels, pred):.3f}')
-print(f'accuracy: {accuracy_score(test_labels, pred):.3f}')
-print(f'precision: {precision_score(test_labels, pred):.3f}')
-print(f'Recall: {recall_score(test_labels, pred):.3f}')
-print(f'F1_score: {f1_score(test_labels, pred):.3f}')
+print(f'error: {mean_squared_error(test_labels, pred):.2f}')
+print(f'accuracy: {accuracy_score(test_labels, pred):.2f}')
+print(f'precision: {precision_score(test_labels, pred):.2f}')
+print(f'Recall: {recall_score(test_labels, pred):.2f}')
+print(f'F1_score: {f1_score(test_labels, pred):.2f}')
 
 # confusion matrix
 conf_matrix = confusion_matrix(test_labels, pred, normalize='true')
 print(conf_matrix)
+
+import seaborn as sns
 sns.heatmap(conf_matrix, annot=True)
 
