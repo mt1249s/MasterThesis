@@ -111,7 +111,7 @@ classifier.compile(loss='categorical_crossentropy',
                    metrics=['accuracy'])
 
 classifier.fit([padded_inputs, train_labels], train_labels, epochs=5, batch_size=32, shuffle=True, validation_split=0.1)
-classifier.save('./ArcFacewithoutAttention.h5')
+classifier.save('./ArcFace.h5')
 classifier.summary()
 plot_model(classifier, to_file="model.png")
 
@@ -124,16 +124,16 @@ print(pred)
 
 # accuracy
 CalculatedAccuracy = sum(pred == test_labels)/len(pred)
-print(f'Accuracy: {CalculatedAccuracy:.2f}')
+print(f'Accuracy: {CalculatedAccuracy:.3f}')
 
 # evaluation scores
 Evaluation.eval_metrics(test_labels, pred)
 
-print(f'error: {mean_squared_error(test_labels, pred):.2f}')
-print(f'accuracy: {accuracy_score(test_labels, pred):.2f}')
-print(f'precision: {precision_score(test_labels, pred):.2f}')
-print(f'Recall: {recall_score(test_labels, pred):.2f}')
-print(f'F1_score: {f1_score(test_labels, pred):.2f}')
+print(f'error: {mean_squared_error(test_labels, pred):.3f}')
+print(f'accuracy: {accuracy_score(test_labels, pred):.3f}')
+print(f'precision: {precision_score(test_labels, pred):.3f}')
+print(f'Recall: {recall_score(test_labels, pred):.3f}')
+print(f'F1_score: {f1_score(test_labels, pred):.3f}')
 
 # confusion matrix
 conf_matrix = confusion_matrix(test_labels, pred, normalize='true')
