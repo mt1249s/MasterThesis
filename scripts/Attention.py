@@ -12,6 +12,7 @@ from matplotlib import pyplot as plt
 # import sklearn
 # from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
 import dot_product_attention
+import positional_embedding
 
 fasta_train = 'H_train.fasta'
 csv_train = 'H_train.csv'
@@ -78,11 +79,13 @@ padded_tests, test_labels = np.array(padded_tests), np.array(test_labels)
 ### what are the max lengths of the train dataset?
 # max_train = df_train['length'].max()
 max_train = 3000
-d_model = 32
+d_model = 2
 output_dim = 2
 
 input_layer1 = layers.Input(shape=(max_train,))
 embedding_layer = tf.keras.layers.Embedding(input_dim=5, output_dim=2, input_length=3000)(input_layer1)
+positional_embedding = layers.Lambda(positional_embedding.positional_encoding)([3000, 2])
+add_embeddings = layers.Add()([embedding_layer, positional_embedding])
 #flatt_output = layers.Flatten()(embedding_layer)
 
 q0 = layers.Dense(d_model, use_bias=False, name='query_layer0')(embedding_layer)
@@ -117,11 +120,6 @@ multi_head_output = layers.Dense(output_dim)(concated_heads)
 
 #temp_out0, temp_attn0 = dot_product_attention.scaled_dot_product_attention(q0, k0, v0, None)
 
-#print('Attention weights are:')
-#print(temp_attn0.shape)
-#print('Output is:')
-#print(temp_out0.shape)
-
 #q1 = layers.Dense(output_dim, use_bias=False, name='query_layer1')(embedding_layer)
 #k1 = layers.Dense(output_dim, use_bias=False, name='key_layer1')(embedding_layer)
 #v1 = layers.Dense(output_dim, use_bias=False, name='values_layer1')(embedding_layer)
@@ -142,10 +140,10 @@ multi_head_output = layers.Dense(output_dim)(concated_heads)
 
 
 # cf = layers.Dense(1, activation='sigmoid')(temp_out)
-cf = layers.Dense(1, activation='sigmoid')(temp_out0)
+cf = layers.Dense(1, activation='sigmoid')(multi_head_output)
 
 adam = tf.keras.optimizers.Adam(
-    learning_rate=0.01,
+    learning_rate=0.009,
     beta_1=0.6,
     beta_2=0.6,
     epsilon=1e-07,
@@ -158,7 +156,7 @@ classifier.compile(optimizer=adam,
                    loss='binary_crossentropy',
                    metrics=['accuracy'])
 classifier.summary()
-plot_model(classifier, to_file="model.png")
+#plot_model(classifier, to_file="model.png")
 #callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=5)
 
 #tf.keras.callbacks.TensorBoard(
@@ -167,7 +165,7 @@ plot_model(classifier, to_file="model.png")
     #profile_batch=2, embeddings_freq=0, embeddings_metadata=None)
 
 #tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs")
-history = classifier.fit(padded_inputs, train_labels, batch_size=32, epochs=20, validation_data=(padded_tests, test_labels))
+history = classifier.fit(padded_inputs, train_labels, batch_size=32, epochs=5, validation_data=(padded_tests, test_labels))
 '''
 pred = classifier.predict([padded_tests, test_labels])
 pred = np.argmax(pred, axis=1)
