@@ -83,7 +83,7 @@ d_model = 2
 output_dim = 2
 
 input_layer1 = layers.Input(shape=(max_train,))
-embedding_layer = tf.keras.layers.Embedding(input_dim=5, output_dim=2, input_length=3000)(input_layer1)
+embedding_layer = tf.keras.layers.Embedding(input_dim=5, output_dim=2, input_length=3000, mask_zero=True)(input_layer1)
 positional_embedding = layers.Lambda(positional_embedding.positional_encoding)([3000, 2])
 add_embeddings = layers.Add()([embedding_layer, positional_embedding])
 #flatt_output = layers.Flatten()(embedding_layer)
