@@ -1,145 +1,137 @@
-import numpy as np
-import csv
-import tensorflow as tf
-import seaborn as sns
-import MarginModels
-import Evaluation
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-from tensorflow.keras.utils import to_categorical
-from Bio import SeqIO
-from tensorflow.keras import models, layers
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers import Layer
+from tensorflow import acos, cos, nn
 from tensorflow.keras import regularizers
-from tensorflow.keras.utils import plot_model
-from sklearn.metrics import mean_squared_error, accuracy_score, precision_score, recall_score, f1_score
-from sklearn.metrics import confusion_matrix
+import tensorflow as tf
 
 
-tf.keras.backend.clear_session
+class ArcFace(Layer):
+    def __init__(self, n_classes=2, s=30.0, m=0.50, regularizer=None, **kwargs):
+        super(ArcFace, self).__init__(**kwargs)
+        self.n_classes = n_classes
+        self.s = s
+        self.m = m
+        self.regularizer = regularizers.get(regularizer)
+
+    def build(self, input_shape):
+        super(ArcFace, self).build(input_shape[0])
+        self.W = self.add_weight(name='W',
+                                 shape=(input_shape[0][-1], self.n_classes),
+                                 initializer='glorot_uniform',
+                                 trainable=True,
+                                 regularizer=self.regularizer)
+
+    def call(self, inputs):
+        x, y = inputs
+
+        x = nn.l2_normalize(x, axis=1)
+        W = nn.l2_normalize(self.W, axis=0)
+
+        logit = x @ W
+
+        theta = acos(K.clip(logit, -1.0 + K.epsilon(), 1.0 - K.epsilon()))
+
+        target_logit = cos(theta + self.m)
+
+        logits = logit * (1 - y) + target_logit * y
+
+        logits *= self.s
+
+        output = nn.softmax(logits)
+
+        return output
+
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            'n_classes': self.n_classes,
+            's': self.s,
+            'm': self.m,
+            'regularizer': self.regularizer,
+            'W': self.W,
+        })
+        return config
+
+    def compute_output_shape(self, input_shape):
+        return (None, self.n_classes)
 
 
-fasta_train = 'H_train.fasta'
-csv_train = 'H_train.csv'
-fasta_test = 'H_test.fasta'
-csv_test = 'H_test.csv'
+
+    class SphereFace(Layer):
+        def __init__(self, n_classes=2, s=30.0, m=1.35, regularizer=None, **kwargs):
+            super(SphereFace, self).__init__(**kwargs)
+            self.n_classes = n_classes
+            self.s = s
+            self.m = m
+            self.regularizer = regularizers.get(regularizer)
+
+        def build(self, input_shape):
+            super(SphereFace, self).build(input_shape[0])
+            self.W = self.add_weight(name='W',
+                                     shape=(input_shape[0][-1], self.n_classes),
+                                     initializer='glorot_uniform',
+                                     trainable=True,
+                                     regularizer=self.regularizer)
+
+        def call(self, inputs):
+            x, y = inputs
+            c = K.shape(x)[-1]
+            # normalize feature
+            x = tf.nn.l2_normalize(x, axis=1)
+            # normalize weights
+            W = tf.nn.l2_normalize(self.W, axis=0)
+            # dot product
+            logits = x @ W
+            # add margin
+            # clip logits to prevent zero division when backward
+            theta = tf.acos(K.clip(logits, -1.0 + K.epsilon(), 1.0 - K.epsilon()))
+            target_logits = tf.cos(self.m * theta)
+            logits = logits * (1 - y) + target_logits * y
+            # feature re-scale
+            logits *= self.s
+            out = tf.nn.softmax(logits)
+
+            return out
+
+        def compute_output_shape(self, input_shape):
+            return (None, self.n_classes)
 
 
-## Add label to the train dataset and generate X_train=record.seq and Y_train=label
-size_train = 0
-train_lst = []
-train_samples = []
-train_labels = []
 
-letters = 'ACGT'
-emb_dict = {letter: number + 1 for number, letter in
-            enumerate(letters)}  # number+1 for emb bec
+        class CosFace(Layer):
+            def __init__(self, n_classes=2, s=30.0, m=0.35, regularizer=None, **kwargs):
+                super(CosFace, self).__init__(**kwargs)
+                self.n_classes = n_classes
+                self.s = s
+                self.m = m
+                self.regularizer = regularizers.get(regularizer)
 
-# test
-with open(csv_train, 'w') as f:
-    writer = csv.writer(f)
-    for record in SeqIO.parse("H_test.fasta", "fasta"):
-        label_train = 0 if 'CDS' in record.id else 1
-        #print(label_train)
-        tarin_sample = []
-        writer.writerow([record.id, record.seq, len(record), label_train])
-        size_train = size_train+1
-        lst=[record.id, str(record.seq), len(record), label_train]
-        #print(lst)
-        for index, letter, in enumerate(record.seq):
-            tarin_sample.append(emb_dict[letter])
+            def build(self, input_shape):
+                super(CosFace, self).build(input_shape[0])
+                self.W = self.add_weight(name='W',
+                                         shape=(input_shape[0][-1], self.n_classes),
+                                         initializer='glorot_uniform',
+                                         trainable=True,
+                                         regularizer=self.regularizer)
 
-        train_lst.append(lst)
-        train_labels.append(label_train)
-        train_samples.append(tarin_sample)
+            def call(self, inputs):
+                x, y = inputs
+                c = K.shape(x)[-1]
+                # normalize feature
+                x = tf.nn.l2_normalize(x, axis=1)
+                # normalize weights
+                W = tf.nn.l2_normalize(self.W, axis=0)
+                # dot product
+                logits = x @ W
+                # add margin
+                target_logits = logits - self.m
+                #
+                logits = logits * (1 - y) + target_logits * y
+                # feature re-scale
+                logits *= self.s
+                out = tf.nn.softmax(logits)
 
+                return out
 
-# padding
-padded_inputs = tf.keras.preprocessing.sequence.pad_sequences(list(train_samples), maxlen=3000)
-
-train_labels = to_categorical(train_labels, 2)
-padded_inputs, train_labels = np.array(padded_inputs), np.array(train_labels)
-
-max_train = 3000
-length_of_one_rna = max_train
-
-
-# test
-size_test = 0
-test_lst = []
-test_samples = []
-test_labels = []
-with open(fasta_test)as fn:
-    for record in SeqIO.parse("H_train.fasta", "fasta"):
-        label_test = 0 if 'CDS' in record.id else 1
-        # print(label_test)
-        test_sample = []
-        size_test = size_test + 1
-        lst = [record.id, str(record.seq), label_test]
-
-        for index, letter, in enumerate(record.seq):
-            test_sample.append(emb_dict[letter])
-
-        test_labels.append(label_test)
-        test_samples.append(test_sample)
-
-# padding
-padded_tests = tf.keras.preprocessing.sequence.pad_sequences(list(test_samples), maxlen=3000)
-padded_tests, test_labels = np.array(padded_tests), np.array(test_labels)
-
-# Model
-input_layer1 = layers.Input(shape=(max_train,))
-y_input_layer = layers.Input(shape=(2,))
-
-embedding_layer = tf.keras.layers.Embedding(input_dim=5, output_dim=1, input_length=3000, mask_zero=True)(input_layer1)
-flatt_output = layers.Flatten()(embedding_layer)
-
-weight_decay = 1e-4
-cf = MarginModels.ArcFace(2, regularizer=regularizers.l2(weight_decay))([flatt_output, y_input_layer])
-#cf = SphereFace(2, regularizer=regularizers.l2(weight_decay))([flatt_output, y_input_layer])
-#cf =CosFace(2, regularizer=regularizers.l2(weight_decay))([flatt_output, y_input_layer])
-
-
-adam = tf.keras.optimizers.Adam(
-    learning_rate=0.0009,
-    beta_1=0.6,
-    beta_2=0.6,
-    epsilon=1e-07,
-    amsgrad=False,
-    name="Adam")
-
-classifier = models.Model([input_layer1, y_input_layer], cf)
-
-classifier.compile(loss='categorical_crossentropy',
-                   optimizer=adam,
-                   metrics=['accuracy'])
-
-classifier.fit([padded_inputs, train_labels], train_labels, epochs=5, batch_size=32, shuffle=True, validation_split=0.1)
-classifier.save('./ArcFacewithoutAttention.h5')
-classifier.summary()
-plot_model(classifier, to_file="model.png")
-
-# prediction
-pred = classifier.predict([padded_tests, test_labels])
-print(pred)
-
-pred = np.argmax(pred, axis=1)
-print(pred)
-
-# accuracy
-CalculatedAccuracy = sum(pred == test_labels)/len(pred)
-print(f'Accuracy: {CalculatedAccuracy:.3f}')
-
-# evaluation scores
-Evaluation.eval_metrics(test_labels, pred)
-
-print(f'error: {mean_squared_error(test_labels, pred):.3f}')
-print(f'accuracy: {accuracy_score(test_labels, pred):.3f}')
-print(f'precision: {precision_score(test_labels, pred):.3f}')
-print(f'Recall: {recall_score(test_labels, pred):.3f}')
-print(f'F1_score: {f1_score(test_labels, pred):.3f}')
-
-# confusion matrix
-conf_matrix = confusion_matrix(test_labels, pred, normalize='true')
-print(conf_matrix)
-sns.heatmap(conf_matrix, annot=True)
-
+            def compute_output_shape(self, input_shape):
+                return (None, self.n_classes)
