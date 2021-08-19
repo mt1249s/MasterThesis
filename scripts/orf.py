@@ -104,10 +104,10 @@ class ClassificationDataset(torch.utils.data.Dataset):  # An abstract class repr
                 # ORFTransform()
                 stop_to_stop_codons = re.split(r'TAA|TAG|TGA', str(record.seq))
                 codon_len = [len(seq) for seq in stop_to_stop_codons]
-                codon_len = codon_len[1:-2]
-                for loop in codon_len:
+                codon_len = codon_len[1:-1]
+                for _ in codon_len:
                     index_max = codon_len.index(max(codon_len))
-                    if (max(codon_len) % 3 == 0) & (max(codon_len) != 0):
+                    if (max(codon_len) % 3 == 0) and (max(codon_len) != 0):
                         orf = stop_to_stop_codons[index_max + 1]
                         # orf = len(orf)*[1]
                         break
@@ -135,4 +135,22 @@ class ClassificationDataset(torch.utils.data.Dataset):  # An abstract class repr
 
 
 
+stop_cods = set('TAA', 'TAG', 'TGA')
+def find_orf(sequence):
+    frames = re.split('|'.join(stop_cods), sequence)
+    if len(frames) < 3:
+        return ''.join([0]*len(sequence))
+    frames = frames[1: -1]
+    frame_orf_inds = []
+    for frame in frames:
+        # TODO finish
+        pass
+
+if __name__ == '__main__':
+    # no stop codons
+    ''
+    print(find_orf('TAGAAATGA'))
+    print(find_orf('TAGAAATGAGGGGGTAG'))
+    frames = ['AAA']
+    print(find_orf('AAATAGAAA'))
 
