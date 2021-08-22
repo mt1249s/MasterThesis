@@ -7,7 +7,7 @@ from Bio import SeqIO
 # NOTE '-' is padding character
 letters = '-ACGT'
 letter2int = {l: i for i, l in enumerate(letters)}
-default_stop_codons = set('TAA', 'TAG', 'TGA')
+default_stop_codons = set(['TAA', 'TAG', 'TGA'])
 
 
 class LNCRNANetData(torch.utils.data.Dataset):
@@ -21,7 +21,7 @@ class LNCRNANetData(torch.utils.data.Dataset):
             for record in SeqIO.parse(f, 'fasta'):
                 target = 0 if 'CDS' in record.id else 1
                 self.targets.append(torch.tensor(target, dtype=torch.long))
-                self.samples.append(record.seq)
+                self.samples.append(str(record.seq))
 
     def __getitem__(self, idx):
         if self.transform is not None:
@@ -50,7 +50,7 @@ def _pad_collate_seqs(batch, max_len=None, pad_val=0):
         second = [e[1] for e in batch]
         return _pad_collate_seqs(first, max_len=max_len, pad_val=pad_val), _pad_collate_seqs(second, max_len=max_len, pad_val=pad_val)
     # NOTE if it's a tensor, check if padding required and stack
-    elif isinstance(elem, torch.tensor):
+    elif isinstance(elem, torch.Tensor):
         shapes = set(tuple(t.size()) for t in batch)
         # TODO this might ignore max_len incorrectly if all sequences in the batch happen to have same length
         if len(shapes) == 1:
@@ -62,7 +62,7 @@ def _pad_collate_seqs(batch, max_len=None, pad_val=0):
                 max_len = max(t.size(0) for t in batch)
             out = torch.full((len(batch), max_len, *(elem.size())[1:]), pad_val)
             for i in range(len(batch)):
-                out[i, ...] = batch[i][...]
+                out[i, :batch[i].size()[0]] = batch[i][...]
             return out
 
     else:
@@ -82,13 +82,13 @@ class Collator():
 def _find_orf(seq, stop_codons):
     frames = re.split('|'.join(stop_codons), seq)
     if len(frames) < 3:
-        return ''.join([0]*len(seq))
-    frame_orf_inds = '0'*len(frames[0])
+        return ''.join([0] * len(seq))
+    frame_orf_inds = '0' * len(frames[0])
     last_frame_orf_inds = '0' * len(frames[-1])
 
     orfind = len(frames)
     orflen = 0
-    for i, frame in frames:
+    for i, frame in enumerate(frames):
         framelen = len(frame)
         if framelen % 3 == 0:
             if orfind == len(frames) or orflen < framelen:
@@ -96,7 +96,7 @@ def _find_orf(seq, stop_codons):
                 orflen = framelen
 
     for i, frame in enumerate(frames[1: -1]):
-        if i+1 == orfind:
+        if i + 1 == orfind:
             frame_orf_inds += '1' * len(frame)
         else:
             frame_orf_inds += '0' * len(frame)
@@ -117,15 +117,19 @@ class ORF_Finder():
 
 # TODO naming
 class Integerize():
+    '''
+    integerizes a sequence of letters given as string, using a given mapping
+    if additional derived features are given, they are assumed to be contained in the second item of the input tuple
+    '''
     def __init__(self, mapping):
         self.mapping = mapping
 
     def __call__(self, seq):
         if isinstance(seq, str):
             return torch.tensor([self.mapping[letter] for letter in seq])
-        elif isinstance(seq, tuple) and len(tuple) == 2:
+        elif isinstance(seq, tuple) and len(seq) == 2:
             # NOTE sequence and orf indicator
-            return torch.tensor([self.mapping[letter] for letter in seq[0]], seq[1])
+            return torch.tensor([self.mapping[letter] for letter in seq[0]]), seq[1]
         else:
             raise ValueError
 
@@ -142,10 +146,10 @@ class Compose():
 
 if __name__ == '__main__':
 
-    from torch.data.utils import DataLoader
-    transform = Compose(Integerize(letter2int), Integerize)
+    from torch.utils.data import DataLoader
+    transform = Compose([ORF_Finder(), Integerize(letter2int)])
     ds = LNCRNANetData('./H_test.fasta', transform)
-    dl = DataLoader(ds, batch_size=4, collate_fn=Collator(), shuffle=True)
+    dl = DataLoader(ds, batch_size=4, collate_fn=Collator(), shuffle=False)
     for batch in dl:
         print(batch)
         break
