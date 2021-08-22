@@ -84,7 +84,7 @@ def _find_orf(seq, stop_codons):
     if len(frames) < 3:
         return ''.join([0] * len(seq))
     frame_orf_inds = '0' * len(frames[0])
-    last_frame_orf_inds = '0' * len(frames[-1])
+    last_frame_orf_inds = '0' * (3 + len(frames[-1]))
 
     orfind = len(frames)
     orflen = 0
@@ -97,9 +97,9 @@ def _find_orf(seq, stop_codons):
 
     for i, frame in enumerate(frames[1: -1]):
         if i + 1 == orfind:
-            frame_orf_inds += '1' * len(frame)
+            frame_orf_inds += '000' + '1' * len(frame)
         else:
-            frame_orf_inds += '0' * len(frame)
+            frame_orf_inds += '0' * (3 + len(frame))
 
     frame_orf_inds += last_frame_orf_inds
     frame_orf_inds = [int(x) for x in frame_orf_inds]
