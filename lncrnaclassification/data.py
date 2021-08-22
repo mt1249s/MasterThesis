@@ -115,7 +115,7 @@ class ORF_Finder():
         return seq, torch.tensor(_find_orf(seq, self.stop_codons))
 
 
-# TODO naming
+# TODO better naming
 class Integerize():
     '''
     integerizes a sequence of letters given as string, using a given mapping
@@ -124,12 +124,29 @@ class Integerize():
     def __init__(self, mapping):
         self.mapping = mapping
 
-    def __call__(self, seq):
-        if isinstance(seq, str):
-            return torch.tensor([self.mapping[letter] for letter in seq])
-        elif isinstance(seq, tuple) and len(seq) == 2:
+    def __call__(self, x):
+        if isinstance(x, str):
+            return torch.tensor([self.mapping[letter] for letter in x])
+        elif isinstance(x, tuple) and len(x) == 2:
             # NOTE sequence and orf indicator
-            return torch.tensor([self.mapping[letter] for letter in seq[0]]), seq[1]
+            return torch.tensor([self.mapping[letter] for letter in x[0]]), x[1]
+        else:
+            raise ValueError
+
+
+class OneHot():
+    '''
+    one hot encodes a torch.LongTensor
+    if additional features are given, concatenates along feature axis
+    '''
+    def __init__(self, num_classes):
+        self.num_classes = num_classes
+
+    def __call__(self, x):
+        if isinstance(x, torch.Tensor):
+            return torch.nn.functional.one_hot(x, self.num_classes)
+        elif isinstance(x, tuple) and len(x) == 2:
+            return torch.cat((torch.nn.functional.one_hot(x[0], self.num_classes), x[1].unsqueeze(-1)), axis=-1)
         else:
             raise ValueError
 

@@ -1,6 +1,6 @@
 import torch
 
-from data import ORF_Finder, Integerize, letter2int
+from data import ORF_Finder, Integerize, letter2int, OneHot
 
 
 def test_orf():
@@ -24,3 +24,17 @@ def test_integerize():
     x = 'AAACCCGGGTTT'
     y = torch.tensor([int(i) for i in '111222333444'], dtype=torch.long)
     assert (integerize(x) == y).all()
+
+
+def test_one_hot():
+    orf_finder = ORF_Finder()
+    integerize = Integerize(letter2int)
+    one_hot = OneHot(5)
+
+    x = 'TAAAAATAG'
+
+    x = orf_finder(x)
+    x = integerize(x)
+    x = one_hot((x))
+
+    assert (x[0, :] == torch.tensor([0., 0., 0., 0., 1., 0])).all()
