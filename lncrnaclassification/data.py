@@ -51,9 +51,8 @@ def _pad_collate_seqs(batch, max_len=None, pad_val=0):
         return _pad_collate_seqs(first, max_len=max_len, pad_val=pad_val), _pad_collate_seqs(second, max_len=max_len, pad_val=pad_val)
     # NOTE if it's a tensor, check if padding required and stack
     elif isinstance(elem, torch.Tensor):
-        shapes = set(tuple(t.size()) for t in batch)
-        # TODO this might ignore max_len incorrectly if all sequences in the batch happen to have same length
-        if len(shapes) == 1:
+        # shapes = set(tuple(t.size()) for t in batch)
+        if elem.numel() == 1:
             # NOTE target
             return torch.stack(batch, 0)
         else:
@@ -70,7 +69,7 @@ def _pad_collate_seqs(batch, max_len=None, pad_val=0):
 
 
 class Collator():
-    def __init__(self, max_len=None, pad_val=0):
+    def __init__(self, max_len=None, pad_val=0.):
         self.max_len = max_len
         self.pad_val = pad_val
 
@@ -82,7 +81,7 @@ class Collator():
 def _find_orf(seq, stop_codons):
     frames = re.split('|'.join(stop_codons), seq)
     if len(frames) < 3:
-        return ''.join([0] * len(seq))
+        return [int(i) for i in (''.join(['0'] * len(seq)))]
     frame_orf_inds = '0' * len(frames[0])
     last_frame_orf_inds = '0' * (3 + len(frames[-1]))
 
@@ -112,7 +111,7 @@ class ORF_Finder():
         self.stop_codons = stop_codons
 
     def __call__(self, seq):
-        return seq, torch.tensor(_find_orf(seq, self.stop_codons))
+        return seq, torch.tensor(_find_orf(seq, self.stop_codons), dtype=torch.float).unsqueeze(-1)
 
 
 # TODO better naming
@@ -144,9 +143,10 @@ class OneHot():
 
     def __call__(self, x):
         if isinstance(x, torch.Tensor):
-            return torch.nn.functional.one_hot(x, self.num_classes)
+            return torch.nn.functional.one_hot(x, self.num_classes).to(torch.float())
         elif isinstance(x, tuple) and len(x) == 2:
-            return torch.cat((torch.nn.functional.one_hot(x[0], self.num_classes), x[1].unsqueeze(-1)), axis=-1)
+            out = torch.cat((torch.nn.functional.one_hot(x[0], self.num_classes), x[1]), axis=-1).to(torch.float)
+            return out
         else:
             raise ValueError
 
