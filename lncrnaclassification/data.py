@@ -79,7 +79,11 @@ class Collator():
 
 # TODO probably not optimal
 def _find_orf(seq, stop_codons):
-    frames = re.split('|'.join(stop_codons), seq)
+    if not isinstance(stop_codons, str):
+        stop_codons = '|'.join(stop_codons)
+
+    frames = re.split(stop_codons, seq)
+
     if len(frames) < 3:
         return [int(i) for i in (''.join(['0'] * len(seq)))]
     frame_orf_inds = '0' * len(frames[0])
