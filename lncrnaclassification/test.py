@@ -7,7 +7,6 @@ def test_orf():
     orf_finder = ORF_Finder()
     x = 'TAAAAATAG'
     y = torch.tensor([int(i) for i in '000111000'], dtype=torch.long).unsqueeze(-1)
-    print(orf_finder(x))
     assert (orf_finder(x)[1] == y).all()
 
     x = 'TAAAATAG'
@@ -17,6 +16,11 @@ def test_orf():
     # NOTE should take the first longest frame found as orf
     x = 'TAAAAATAGAAATAG'
     y = torch.tensor([int(i) for i in '000111000000000'], dtype=torch.long).unsqueeze(-1)
+    assert (orf_finder(x)[1] == y).all()
+
+    x = 'TAAAAATAGAAAAAATAG'
+    print(orf_finder(x)[1])
+    y = torch.tensor([int(i) for i in '000000000111111000'], dtype=torch.long).unsqueeze(-1)
     assert (orf_finder(x)[1] == y).all()
 
     orf_finder = ORF_Finder('TAA|TAG|TGA')
